@@ -1,0 +1,24 @@
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+import uvicorn
+
+from db.mysql import check_connection, engine
+from routers import router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("Starting up...")
+    check_connection(engine)
+    yield
+    engine.dispose()
+    print("Shutting down...")
+
+
+app = FastAPI(lifespan=lifespan)
+
+app.include_router(router, prefix="/network")
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
