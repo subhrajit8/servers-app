@@ -52,6 +52,11 @@ async def create_edge(conn: AsyncConnection, payload: EdgeCreate) -> EdgeRespons
                 detail="Source Server and Destination Server are same.",
             )
 
+        edge_source, edge_destination = sorted(
+            (source_node.name, destination_node.name)
+        ) # Sort the nodes alphabetically to implement unidrected node concept.
+
+        # Duplicate Edges Check
         existing_edge = await conn.execute(
             text(
                 "SELECT id FROM edges "
@@ -59,8 +64,8 @@ async def create_edge(conn: AsyncConnection, payload: EdgeCreate) -> EdgeRespons
                 "AND destination_name = :destination_name LIMIT 1"
             ),
             {
-                "source_name": source_node.name,
-                "destination_name": destination_node.name,
+                "source_name": edge_source,
+                "destination_name": edge_destination,
             },
         )
         if existing_edge.first() is not None:
@@ -75,8 +80,8 @@ async def create_edge(conn: AsyncConnection, payload: EdgeCreate) -> EdgeRespons
                 "VALUES (:source_name, :destination_name, :latency)"
             ),
             {
-                "source_name": source_node.name,
-                "destination_name": destination_node.name,
+                "source_name": edge_source,
+                "destination_name": edge_destination,
                 "latency": payload.latency,
             },
         )
@@ -97,7 +102,7 @@ async def create_edge(conn: AsyncConnection, payload: EdgeCreate) -> EdgeRespons
 
     return EdgeResponse(
         id=edge_id,
-        source=source_node.name,
-        destination=destination_node.name,
+        source=edge_source,
+        destination=edge_destination,
         latency=payload.latency,
     )
