@@ -10,9 +10,9 @@ from routers import router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("Starting up...")
-    check_connection(engine)
+    await check_connection(engine)
     yield
-    engine.dispose()
+    await engine.dispose()
     print("Shutting down...")
 
 

@@ -8,7 +8,7 @@ dependencies = [
     "fastapi==0.141.1",
     "uvicorn==0.52.1",
     "sqlalchemy==2.0.51",
-    "pymysql==1.0.2",
     "python-dotenv==1.2.2",
     "pydantic==2.13.4",
+    "asyncmy==0.2.17",
 ]
