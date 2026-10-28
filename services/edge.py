@@ -102,7 +102,7 @@ async def create_edge(conn: AsyncConnection, payload: EdgeCreate) -> EdgeRespons
 
     return EdgeResponse(
         id=edge_id,
-        source=edge_source,
-        destination=edge_destination,
+        source=source_node.name,
+        destination=destination_node.name,
         latency=payload.latency,
     )

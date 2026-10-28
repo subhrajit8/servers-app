@@ -73,6 +73,18 @@ json
 Names must be no more than 100 characters. A blank name or an existing name
 returns HTTP `400`. A missing `name` field is rejected by request validation.
 
+### List node names
+
+```http
+GET /network/nodes
+```
+
+The response is a JSON list of names, without node IDs:
+
+```json
+["edge-server-01", "edge-server-02"]
+```
+
 ### Add an edge
 
 ```http
@@ -93,6 +105,8 @@ Request body:
 Both named nodes must already exist, latency must be greater than zero, and an
 undirected node pair can only be added once. Node names are sorted before
 checking and storing the pair, so adding `A`–`B` prevents adding `B`–`A`.
+The creation response preserves the order of `source` and `destination` in
+the request, even though the pair is stored in sorted order.
 Self-loops (where the source and destination identify the same node) are
 rejected with HTTP `400`.
 Missing or blank source/destination values, latency values less than or equal
@@ -100,3 +114,37 @@ to zero, duplicate edges, and references to nodes that do not exist also
 return HTTP `400`.
 Successful requests return HTTP `201` with the inserted edge ID, source,
 destination, and latency.
+
+### Find the lowest-latency path
+
+```http
+POST /network/path
+Content-Type: application/json
+```
+
+Request body:
+
+```json
+{
+  "source": "ServerA",
+  "destination": "ServerD"
+}
+```
+
+Edges are traversable in both directions. The endpoint returns the path with
+the lowest total latency:
+
+```json
+{
+  "total_latency": 23.4,
+  "path": ["ServerA", "ServerB", "ServerD"]
+}
+```
+
+If either node does not exist or no route connects them, it returns HTTP `404`:
+
+```json
+{
+  "error": "No path exists between ServerA and ServerD"
+}
+```

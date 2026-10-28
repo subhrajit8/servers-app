@@ -18,3 +18,14 @@ class EdgeResponse(BaseModel):
     source: str = Field(max_length=100)
     destination: str = Field(max_length=100)
     latency: float = Field(gt=0)
+
+class PathLookupRequest(BaseModel):
+    source: str = Field(min_length=1, max_length=100)
+    destination: str = Field(min_length=1, max_length=100)
+
+class PathLookupResponse(BaseModel):
+    total_latency: float = Field(ge=0)
+    path: list[str]
+
+class PathNotFoundResponse(BaseModel):
+    error: str
