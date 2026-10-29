@@ -1,9 +1,12 @@
 from typing import Annotated
-
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncConnection
+from dotenv import load_dotenv
+import hmac
 
+from utils.auth import get_current_user, ACCESS_TOKEN_LIFETIME, _get_auth_settings, create_access_token
+from utils.validation import TokenResponse, LoginRequest
 from db.mysql import get_db
 from services.node import create_node
 from services.edge import create_edge
@@ -23,11 +26,47 @@ router = APIRouter()
 
 DbConn = Annotated[AsyncConnection, Depends(get_db)]
 
-@router.post("/nodes", response_model=NodeResponse, status_code=201)
+load_dotenv()
+
+@router.post("/auth/token", response_model=TokenResponse)
+async def issue_token(payload: LoginRequest) -> TokenResponse:
+    configured_username, configured_password, secret_key = _get_auth_settings()
+    username_matches = hmac.compare_digest(
+        payload.username.encode("utf-8"),
+        configured_username.encode("utf-8"),
+    )
+    password_matches = hmac.compare_digest(
+        payload.password.encode("utf-8"),
+        configured_password.encode("utf-8"),
+    )
+    if not username_matches or not password_matches:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return TokenResponse(
+        access_token=create_access_token(configured_username, secret_key),
+        expires_in=int(ACCESS_TOKEN_LIFETIME.total_seconds()),
+    )
+
+@router.post(
+    "/nodes",
+    response_model=NodeResponse,
+    status_code=201,
+    dependencies=[Depends(get_current_user)],
+)
 async def create_node_route(payload: NodeCreate, conn: DbConn):
     return await create_node(conn, payload)
 
-@router.post("/edges", response_model=EdgeResponse, status_code=201)
+
+@router.post(
+    "/edges",
+    response_model=EdgeResponse,
+    status_code=201,
+    dependencies=[Depends(get_current_user)],
+)
 async def create_edge_route(payload: EdgeCreate, conn: DbConn):
     return await create_edge(conn, payload)
 

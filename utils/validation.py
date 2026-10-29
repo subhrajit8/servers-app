@@ -29,3 +29,12 @@ class PathLookupResponse(BaseModel):
 
 class PathNotFoundResponse(BaseModel):
     error: str
+
+class LoginRequest(BaseModel):
+    username: str = Field(min_length=5)
+    password: str = Field(min_length=7)
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
