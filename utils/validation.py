@@ -1,4 +1,6 @@
-from pydantic import BaseModel, Field
+from datetime import datetime
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class NodeCreate(BaseModel):
@@ -29,6 +31,29 @@ class PathLookupResponse(BaseModel):
 
 class PathNotFoundResponse(BaseModel):
     error: str
+
+class RouteHistoryResponse(BaseModel):
+    id: int
+    source: str
+    destination: str
+    total_latency: float = Field(ge=0)
+    path: list[str]
+    username: str
+    created_at: datetime
+
+class RouteHistoryRequest(BaseModel):
+    limit: int = Field(ge=1, le=100)
+    date_from: datetime | None = None
+    date_to: datetime | None = None
+    source: str | None = Field(default=None, max_length=100)
+    destination: str | None = Field(default=None, max_length=100)
+
+    @field_validator("date_from", "date_to", mode="before")
+    @classmethod
+    def blank_dates_are_none(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
 class LoginRequest(BaseModel):
     username: str = Field(min_length=5)

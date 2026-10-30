@@ -7,12 +7,13 @@ import hmac
 
 from utils.auth import get_current_user, ACCESS_TOKEN_LIFETIME, _get_auth_settings, create_access_token
 from utils.rate_limit import login_rate_limiter
-from utils.validation import TokenResponse, LoginRequest
+from utils.validation import TokenResponse, LoginRequest, RouteHistoryRequest
 from db.mysql import get_db
 from services.node import create_node
 from services.edge import create_edge
 from services.fetchnodes import get_nodes
 from services.path import find_path
+from services.route_history import get_route_history, save_route_history
 from utils.validation import (
     EdgeCreate,
     EdgeResponse,
@@ -21,6 +22,7 @@ from utils.validation import (
     PathLookupRequest,
     PathLookupResponse,
     PathNotFoundResponse,
+    RouteHistoryResponse,
 )
 
 router = APIRouter()
@@ -84,8 +86,45 @@ async def getall_nodes(conn: DbConn):
     response_model=PathLookupResponse,
     responses={404: {"model": PathNotFoundResponse}},
 )
-async def get_path(payload: PathLookupRequest, conn: DbConn):
+async def get_path(
+    payload: PathLookupRequest,
+    conn: DbConn,
+    username: Annotated[str, Depends(get_current_user)],
+):
     result = await find_path(conn, payload)
     if isinstance(result, PathNotFoundResponse):
         return JSONResponse(status_code=404, content=result.model_dump())
+    await save_route_history(conn, result, username)
     return result
+
+
+@router.post(
+    "/routes/history",
+    response_model=list[RouteHistoryResponse],
+)
+async def get_route_history_route(
+    payload: RouteHistoryRequest,
+    conn: DbConn,
+    username: Annotated[str, Depends(get_current_user)],
+) -> list[RouteHistoryResponse]:
+    source = (payload.source or "").strip() or None
+    destination = (payload.destination or "").strip() or None
+    if (
+        payload.date_from is not None
+        and payload.date_to is not None
+        and payload.date_from.replace(tzinfo=None) > payload.date_to.replace(tzinfo=None)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="date_from must be earlier than or equal to date_to",
+        )
+
+    return await get_route_history(
+        conn,
+        username,
+        source,
+        destination,
+        payload.limit,
+        payload.date_from,
+        payload.date_to,
+    )

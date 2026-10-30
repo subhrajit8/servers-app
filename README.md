@@ -36,7 +36,22 @@ CREATE TABLE edges(
   FOREIGN KEY (source_name) REFERENCES nodes(name) ON DELETE CASCADE,
   FOREIGN KEY (destination_name) REFERENCES nodes(name) ON DELETE CASCADE
 );
+
+CREATE TABLE route_history (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    source VARCHAR(100) NOT NULL,
+    destination VARCHAR(100) NOT NULL,
+    total_latency DOUBLE NOT NULL,
+    path JSON NOT NULL,
+    username VARCHAR(255) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    INDEX idx_route_history_created_at (created_at)
+);
 ```
+
+If the database already exists, create the `route_history` table before
+deploying this version; the application does not create or migrate tables
+automatically.
 
 ## JWT authorization
 
@@ -212,6 +227,7 @@ destination, and latency.
 ```http
 POST /network/routes/shortest
 Content-Type: application/json
+Authorization: Bearer <access-token>
 ```
 
 Request body:
@@ -240,3 +256,45 @@ If either node does not exist or no route connects them, it returns HTTP `404`:
   "error": "No path exists between ServerA and ServerD"
 }
 ```
+
+### Get route query history
+
+```http
+POST /network/routes/history
+Content-Type: application/json
+Authorization: Bearer <access-token>
+```
+
+Send a JSON body with the required `limit` and any optional filters:
+
+```json
+{
+  "limit": 20,
+  "date_from": "2026-02-20T00:00:00",
+  "date_to": "2026-02-21T00:00:00",
+  "source": "ServerA",
+  "destination": "ServerD"
+}
+```
+
+`date_from`, `date_to`, `source`, and `destination` may be omitted. Blank
+date or source/destination values are treated as omitted.
+
+This endpoint and `POST /network/routes/shortest` require a valid bearer token.
+Each successful shortest-route query is stored in MySQL with its source,
+destination, total latency, full path, authenticated username, and IST creation
+time. Each authenticated user can only see history rows stored under their
+username. Failed route lookups are not stored. History is returned newest first;
+`limit` is required and must be between 1 and 100. `source`, `destination`,
+`date_from`, and `date_to` are optional; omitting a filter means it does not
+restrict the results, so omitting all four returns the authenticated user's
+history across all nodes and dates. If supplied, source and destination must
+contain at most 100 characters; blank or whitespace-only values are treated as
+omitted. Blank or whitespace-only date values are also treated as omitted.
+Nonblank dates must be valid ISO 8601 datetimes in IST.
+If both dates are supplied, `date_from` must not be later than `date_to`.
+Timezone offsets, if present, do not change the supplied wall-clock time. Date
+bounds are inclusive. Results are ordered by `created_at` descending.
+
+Each result includes the route's `id`, `source`, `destination`,
+`total_latency`, `path`, `username`, and `created_at` with the `+05:30` offset.
