@@ -12,7 +12,7 @@ from routers import router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("Starting up...")
-    validate_auth_config()
+    await validate_auth_config()
     await check_connection(engine)
     yield
     await engine.dispose()

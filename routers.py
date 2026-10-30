@@ -1,11 +1,12 @@
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncConnection
 from dotenv import load_dotenv
 import hmac
 
 from utils.auth import get_current_user, ACCESS_TOKEN_LIFETIME, _get_auth_settings, create_access_token
+from utils.rate_limit import login_rate_limiter
 from utils.validation import TokenResponse, LoginRequest
 from db.mysql import get_db
 from services.node import create_node
@@ -28,9 +29,12 @@ DbConn = Annotated[AsyncConnection, Depends(get_db)]
 
 load_dotenv()
 
-@router.post("/auth/token", response_model=TokenResponse)
-async def issue_token(payload: LoginRequest) -> TokenResponse:
-    configured_username, configured_password, secret_key = _get_auth_settings()
+@router.post("/auth/login", response_model=TokenResponse)
+async def issue_token(payload: LoginRequest, request: Request) -> TokenResponse:
+    client_ip = request.client.host if request.client is not None else "unknown"
+    await login_rate_limiter.check(client_ip)
+
+    configured_username, configured_password, secret_key = await _get_auth_settings()
     username_matches = hmac.compare_digest(
         payload.username.encode("utf-8"),
         configured_username.encode("utf-8"),
@@ -47,7 +51,7 @@ async def issue_token(payload: LoginRequest) -> TokenResponse:
         )
 
     return TokenResponse(
-        access_token=create_access_token(configured_username, secret_key),
+        access_token=await create_access_token(configured_username, secret_key),
         expires_in=int(ACCESS_TOKEN_LIFETIME.total_seconds()),
     )
 

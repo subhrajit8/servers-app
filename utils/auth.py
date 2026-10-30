@@ -11,9 +11,9 @@ load_dotenv()
 
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_LIFETIME = timedelta(minutes=30)
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token", auto_error=False)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/network/auth/login", auto_error=False)
 
-def _get_auth_settings() -> tuple[str, str, str]:
+async def _get_auth_settings() -> tuple[str, str, str]:
     username = os.environ["AUTH_USERNAME"]
     password = os.environ["AUTH_PASSWORD"]
     secret_key = os.environ["JWT_SECRET_KEY"]
@@ -23,11 +23,11 @@ def _get_auth_settings() -> tuple[str, str, str]:
     return username, password, secret_key
 
 
-def validate_auth_config() -> None:
-    _get_auth_settings()
+async def validate_auth_config() -> None:
+    await _get_auth_settings()
 
 
-def create_access_token(username: str, secret_key: str) -> str:
+async def create_access_token(username: str, secret_key: str) -> str:
     now = datetime.now(timezone.utc)
     expires_at = now + ACCESS_TOKEN_LIFETIME
     return jwt.encode(
@@ -40,7 +40,7 @@ def create_access_token(username: str, secret_key: str) -> str:
         algorithm=JWT_ALGORITHM,
     )
 
-def get_current_user(
+async def get_current_user(
     credentials: Annotated[
         str | None,
         Depends(oauth2_scheme),
@@ -53,7 +53,7 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    _, _, secret_key = _get_auth_settings()
+    _, _, secret_key = await _get_auth_settings()
     try:
         claims = jwt.decode(
             credentials,

@@ -38,6 +38,72 @@ CREATE TABLE edges(
 );
 ```
 
+## JWT authorization
+
+This app uses a single configured account for login. The username and password
+are read from environment variables; passwords are not stored in the database
+by this environment-based setup. FastAPI exposes the bearer-token flow as
+OAuth2 password bearer authentication, and access tokens are signed JWTs using
+HS256.
+
+1. Copy the example configuration to a local, ignored file:
+
+   ```powershell
+   Copy-Item .env.example .env.local
+   ```
+
+2. Set `DATABASE_URL` to your MySQL connection, and set `AUTH_USERNAME` and a
+   unique `AUTH_PASSWORD` of at least 12 characters in `.env.local`.
+3. Generate the JWT signing key locally:
+
+   ```powershell
+   uv run python -c "import secrets; print(secrets.token_urlsafe(32))"
+   ```
+
+4. Put the generated value in `JWT_SECRET_KEY` in `.env.local`. Keep it
+   private. `.env.local` is ignored by Git; do not commit secrets. In
+   production, use the platform's secret manager instead of an env file.
+5. Start the server. It validates the required auth settings at startup.
+6. Request a token:
+
+   ```http
+   POST /network/auth/login
+   Content-Type: application/json
+   ```
+
+   ```json
+   {
+     "username": "your-configured-username",
+     "password": "your-configured-password"
+   }
+   ```
+
+   The response contains a bearer JWT valid for 30 minutes:
+
+   ```json
+   {
+     "access_token": "<signed-jwt>",
+     "token_type": "bearer",
+     "expires_in": 1800
+   }
+   ```
+
+7. Send `Authorization: Bearer <access_token>` when creating nodes or edges.
+   The read-only node-list and shortest-route endpoints remain public. Invalid
+   or expired tokens receive HTTP `401`.
+
+The login endpoint allows five requests per client IP in each 60-second
+window. Further requests receive HTTP `429` and a `Retry-After` header. This
+limiter is in-process, so its counts are not shared across multiple workers or
+application replicas and reset when the process restarts. For those deployment
+setups, use a shared store such as Redis. When running behind a reverse proxy,
+configure trusted proxy handling before relying on client IP rate limits; do
+not trust arbitrary client-supplied forwarding headers.
+
+The configured account is a simple single-user/admin mechanism, not a
+multi-user identity system. For production multi-user authentication, use a
+user store with hashed passwords or an identity provider.
+
 ## Run the application
 
 From the project root:
@@ -46,11 +112,37 @@ From the project root:
 uv run python main.py
 ```
 
+## Run with Docker
+
+Build the image from the project root:
+
+```powershell
+docker build -t server-nodes-app .
+```
+
+Run it with the required settings from your local `.env` file:
+
+```powershell
+docker run --rm -p 8000:8000 --env-file .env server-nodes-app
+```
+
+The `.env` file is not copied into the image. Ensure `DATABASE_URL`,
+`AUTH_USERNAME`, `AUTH_PASSWORD`, and `JWT_SECRET_KEY` are set in it. The
+database hostname in `DATABASE_URL` must be reachable from the container; for
+example, `localhost` inside the container refers to the container itself.
+
+## CORS
+
+The API allows requests from all origins, with `GET` and `POST` methods and
+`Authorization` and `Content-Type` headers. Cookie credentials are not enabled;
+bearer JWTs are sent using the `Authorization` header. Allowing all origins is
+convenient but less restrictive than a production origin allowlist.
+
 ## API
 
 ### Add a node
 
-http POST /network/nodes-add
+`POST /network/nodes`
 Content-Type: application/json
 
 
@@ -88,7 +180,7 @@ The response is a JSON list of names, without node IDs:
 ### Add an edge
 
 ```http
-POST /network/edges-add
+POST /network/edges
 Content-Type: application/json
 ```
 
@@ -118,7 +210,7 @@ destination, and latency.
 ### Find the lowest-latency path
 
 ```http
-POST /network/path
+POST /network/routes/shortest
 Content-Type: application/json
 ```
 
